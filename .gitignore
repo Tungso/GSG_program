@@ -4,8 +4,12 @@
 # 2) .gitignore 자신은 예외로
 !.gitignore
 
-# 3) 올릴 폴더·파일만 허용
-!extract_template/
-!extract_template/**
+# 3) 필수 리소스만 허용
 !main.py
 !app_icon.ico
+!extract_template/
+!extract_template/**
+
+# 4) student_list 디렉토리는 유지하되, 엑셀 파일만 추적
+!student_list/
+!student_list/student_list.xlsx
