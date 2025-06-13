@@ -1,50 +1,76 @@
 import tkinter as tk
+from tkinter import messagebox, ttk
 import webbrowser
 import os
 import sys
-from tkinter import messagebox
 from docx import Document
 from datetime import datetime
+import pandas as pd
 
+# ——— 전역에서 엑셀 읽기 ———
+if getattr(sys, 'frozen', False):
+    base_dir = sys._MEIPASS
+else:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+student_dir  = os.path.join(base_dir, "student_list")
+student_file = os.path.join(student_dir, "student_list.xlsx")
+
+try:
+    df_students = pd.read_excel(student_file, dtype=str)
+    student_names = df_students["학생 이름"].tolist()
+except Exception as e:
+    student_names = []
+    # GUI 시작 전에 에러를 띄우려면 root 만들기 전에도 가능하지만,
+    # 여기서는 Combobox가 빈 리스트가 되는 정도로 처리합니다.
+
+def on_student_selected(event):
+    name = combo_name.get()
+    if name not in student_names:
+        return
+    rec = df_students[df_students["학생 이름"] == name].iloc[0]
+    entry_grade.delete(0, "end");  entry_grade.insert(0, rec["학년"])
+    entry_class.delete(0, "end");  entry_class.insert(0, rec["반"])
+    entry_number.delete(0, "end"); entry_number.insert(0, rec["번호"])
+    entry_name.delete(0, "end");   entry_name.insert(0, rec["학생 이름"])
+    entry_parent.delete(0, "end"); entry_parent.insert(0, rec["보호자 이름"])
 
 def generate_document():
     # 사용자 입력값
-    학년 = entry_grade.get()
-    반 = entry_class.get()
-    번호 = entry_number.get()
-    이름 = entry_name.get()
-    보호자 = entry_parent.get()
-    구분 = var_type.get()
-    시작년 = entry_start_year.get()
-    시작월 = entry_start_month.get()
-    시작일 = entry_start_day.get()
-    종료월 = entry_end_month.get()
-    종료일 = entry_end_day.get()
-    며칠간 = entry_days.get()
-    사유 = entry_reason.get("1.0", "end").strip()
-    오늘 = datetime.today().strftime("%Y년 %m월 %d일")
+    학년    = entry_grade.get()
+    반      = entry_class.get()
+    번호    = entry_number.get()
+    이름    = entry_name.get()
+    보호자  = entry_parent.get()
+    구분    = var_type.get()
+    시작년  = entry_start_year.get()
+    시작월  = entry_start_month.get()
+    시작일  = entry_start_day.get()
+    종료월  = entry_end_month.get()
+    종료일  = entry_end_day.get()
+    며칠간  = entry_days.get()
+    사유    = entry_reason.get("1.0", "end").strip()
+    오늘    = datetime.today().strftime("%Y년 %m월 %d일")
 
-    # 📂 템플릿 경로: (pyinstaller용 MEIPASS)
+    # 템플릿 경로
     if getattr(sys, 'frozen', False):
         base_dir = sys._MEIPASS
     else:
         base_dir = os.path.dirname(os.path.abspath(__file__))
-
     template_path = os.path.join(base_dir, "extract_template", "template_word.docx")
 
-    # 📂 출력 폴더 경로
+    # 출력 폴더 경로
     if getattr(sys, 'frozen', False):
         program_dir = os.path.dirname(sys.executable)
     else:
         program_dir = os.path.dirname(os.path.abspath(__file__))
-
     output_dir = os.path.join(program_dir, "output")
     os.makedirs(output_dir, exist_ok=True)
 
-    # 📄 파일명 구성
-    start_date_str = f"{시작년.zfill(4)}-{시작월.zfill(2)}-{시작일.zfill(2)}"
-    filename_docx = f"결석신고서_{이름}_{start_date_str}.docx"
-    output_docx_path = os.path.join(output_dir, filename_docx)
+    # 파일명 구성
+    start_date_str    = f"{시작년.zfill(4)}-{시작월.zfill(2)}-{시작일.zfill(2)}"
+    filename_docx     = f"결석신고서_{이름}_{start_date_str}.docx"
+    output_docx_path  = os.path.join(output_dir, filename_docx)
 
     # 템플릿 열기
     try:
@@ -53,7 +79,7 @@ def generate_document():
         messagebox.showerror("에러", f"템플릿 파일을 여는 데 실패했습니다:\n{e}")
         return
 
-    # 텍스트 치환
+    # 치환 맵
     replacements = {
         "{학년}": 학년, "{반}": 반, "{번호}": 번호, "{이름}": 이름,
         "{보호자}": 보호자, "{구분}": 구분,
@@ -63,35 +89,32 @@ def generate_document():
         "{학생서명}": 이름, "{보호자서명}": 보호자
     }
 
-    # 파라그래프 치환 (run 단위, 스타일 유지)
+    # 본문 치환
     for p in doc.paragraphs:
-        full_text = "".join(run.text for run in p.runs)
-        new_text = full_text
-        for key, value in replacements.items():
-            new_text = new_text.replace(key, value)
-        if new_text != full_text:
-            # 기존 run들에 새 텍스트를 나눠서 재삽입
-            # 첫 번째 run에 새 텍스트 넣고, 나머지 run은 비우기
-            p.runs[0].text = new_text
-            for i in range(1, len(p.runs)):
-                p.runs[i].text = ""
+        full = "".join(run.text for run in p.runs)
+        new  = full
+        for k, v in replacements.items():
+            new = new.replace(k, v)
+        if new != full:
+            p.runs[0].text = new
+            for run in p.runs[1:]:
+                run.text = ""
 
-
-    # 테이블 치환 (run 단위, 스타일 유지)
+    # 테이블 치환
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    full_text = "".join(run.text for run in p.runs)
-                    new_text = full_text
-                    for key, value in replacements.items():
-                        new_text = new_text.replace(key, value)
-                    if new_text != full_text:
-                        p.runs[0].text = new_text
-                        for i in range(1, len(p.runs)):
-                            p.runs[i].text = ""
+                    full = "".join(run.text for run in p.runs)
+                    new  = full
+                    for k, v in replacements.items():
+                        new = new.replace(k, v)
+                    if new != full:
+                        p.runs[0].text = new
+                        for run in p.runs[1:]:
+                            run.text = ""
 
-    # DOCX 저장
+    # 저장
     try:
         doc.save(output_docx_path)
         messagebox.showinfo("성공", f"{output_docx_path}\nDOCX로 저장 완료!")
@@ -100,23 +123,27 @@ def generate_document():
             f.write(f"DOCX 저장 오류: {e}")
         messagebox.showerror("저장 실패", f"DOCX 저장 중 오류 발생:\n{e}")
 
-    # 디버그용 출력
-    print(f"[DEBUG] 템플릿 경로: {template_path}")
-    print(f"[DEBUG] 출력 경로: {output_docx_path}")
-
-
 # ------------------ GUI ------------------
 
 root = tk.Tk()
 root.title("결석계 자동 작성기")
-root.geometry("650x410")
+root.geometry("700x460")
 
+# 제목
 title_label = tk.Label(root, text="결석계 자동 작성기", font=("맑은 고딕", 16, "bold"))
 title_label.grid(row=0, column=0, columnspan=3, pady=(10, 20))
 
+# 학생 선택 드롭다운
+tk.Label(root, text="학생 선택").grid(row=1, column=0, sticky="e", padx=5, pady=3)
+combo_name = ttk.Combobox(root, values=student_names, state="readonly", width=20)
+combo_name.grid(row=1, column=1, padx=5, pady=3, sticky="w")
+combo_name.set("선택하세요")
+combo_name.bind("<<ComboboxSelected>>", on_student_selected)
+
+# 수동 입력 필드
 fields = [
-    ("학년", 1), ("반", 2), ("번호", 3),
-    ("학생 이름", 4), ("보호자 이름", 5)
+    ("학년", 2), ("반", 3), ("번호", 4),
+    ("학생 이름", 5), ("보호자 이름", 6)
 ]
 entries = {}
 for label, row in fields:
@@ -125,44 +152,49 @@ for label, row in fields:
     e.grid(row=row, column=1, padx=5, pady=3, sticky="w")
     entries[label] = e
 
-entry_grade = entries["학년"]
-entry_class = entries["반"]
+entry_grade  = entries["학년"]
+entry_class  = entries["반"]
 entry_number = entries["번호"]
-entry_name = entries["학생 이름"]
+entry_name   = entries["학생 이름"]
 entry_parent = entries["보호자 이름"]
 
-tk.Label(root, text="결석 구분").grid(row=6, column=0, sticky="e", padx=5, pady=3)
-var_type = tk.StringVar()
-var_type.set("출석인정")
+# 결석 구분
+tk.Label(root, text="결석 구분").grid(row=7, column=0, sticky="e", padx=5, pady=3)
+var_type = tk.StringVar(value="출석인정")
 option_menu = tk.OptionMenu(root, var_type, "출석인정", "질병", "기타")
 option_menu.config(bg="lightyellow")
-option_menu.grid(row=6, column=1, sticky="w", padx=5)
+option_menu.grid(row=7, column=1, sticky="w", padx=5)
 
-tk.Label(root, text="시작 날짜").grid(row=7, column=0, sticky="e", padx=5, pady=3)
+# 시작 날짜
+tk.Label(root, text="시작 날짜").grid(row=8, column=0, sticky="e", padx=5, pady=3)
 frame_start = tk.Frame(root)
-frame_start.grid(row=7, column=1, sticky="w", padx=5)
-entry_start_year = tk.Entry(frame_start, width=5); entry_start_year.pack(side="left")
+frame_start.grid(row=8, column=1, sticky="w", padx=5)
+entry_start_year  = tk.Entry(frame_start, width=5); entry_start_year.pack(side="left")
 tk.Label(frame_start, text="년").pack(side="left")
 entry_start_month = tk.Entry(frame_start, width=5); entry_start_month.pack(side="left")
 tk.Label(frame_start, text="월").pack(side="left")
-entry_start_day = tk.Entry(frame_start, width=5); entry_start_day.pack(side="left")
+entry_start_day   = tk.Entry(frame_start, width=5); entry_start_day.pack(side="left")
 tk.Label(frame_start, text="일").pack(side="left")
 
-tk.Label(root, text="종료 날짜").grid(row=8, column=0, sticky="e", padx=5, pady=3)
+# 종료 날짜
+tk.Label(root, text="종료 날짜").grid(row=9, column=0, sticky="e", padx=5, pady=3)
 frame_end = tk.Frame(root)
-frame_end.grid(row=8, column=1, sticky="w", padx=5)
+frame_end.grid(row=9, column=1, sticky="w", padx=5)
 entry_end_month = tk.Entry(frame_end, width=5); entry_end_month.pack(side="left")
 tk.Label(frame_end, text="월").pack(side="left")
-entry_end_day = tk.Entry(frame_end, width=5); entry_end_day.pack(side="left")
+entry_end_day   = tk.Entry(frame_end, width=5); entry_end_day.pack(side="left")
 tk.Label(frame_end, text="일").pack(side="left")
-entry_days = tk.Entry(frame_end, width=5); entry_days.pack(side="left")
+entry_days      = tk.Entry(frame_end, width=5); entry_days.pack(side="left")
 tk.Label(frame_end, text="일간").pack(side="left")
 
-tk.Label(root, text="사유").grid(row=9, column=0, sticky="ne", padx=5, pady=3)
+# 사유 입력
+tk.Label(root, text="사유").grid(row=10, column=0, sticky="ne", padx=5, pady=3)
 entry_reason = tk.Text(root, height=2, width=30)
-entry_reason.grid(row=9, column=1, columnspan=2, sticky="w", padx=5, pady=3)
+entry_reason.grid(row=10, column=1, columnspan=2, sticky="w", padx=5, pady=3)
 
-tk.Button(root, text="결석계 생성", command=generate_document, bg="lightgreen").grid(row=10, column=1, pady=10)
+# 버튼
+tk.Button(root, text="결석계 생성", command=generate_document, bg="lightgreen")\
+    .grid(row=11, column=1, pady=10)
 
 # 작성 요령
 guideline_text = (
@@ -180,7 +212,7 @@ guideline_label = tk.Label(
     bg="#f4f4f4", relief="groove",
     width=40, height=20
 )
-guideline_label.grid(row=0, column=4, rowspan=11, sticky="n", padx=20)
+guideline_label.grid(row=1, column=4, rowspan=11, sticky="n", padx=20)
 
 # 하이퍼링크
 def open_blog(event):
@@ -192,7 +224,7 @@ copyright_label = tk.Label(
     font=("맑은 고딕", 9, "underline"),
     fg="blue", cursor="hand2"
 )
-copyright_label.grid(row=11, column=0, columnspan=5, pady=(20, 5))
+copyright_label.grid(row=12, column=0, columnspan=5, pady=(20, 5))
 copyright_label.bind("<Button-1>", open_blog)
 
 root.mainloop()
