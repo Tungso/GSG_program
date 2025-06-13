@@ -1,0 +1,11 @@
+# 1) 모든 파일/폴더 무시
+*
+
+# 2) .gitignore 자신은 예외로
+!.gitignore
+
+# 3) 올릴 폴더·파일만 허용
+!extract_template/
+!extract_template/**
+!main.py
+!app_icon.ico
