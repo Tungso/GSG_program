@@ -11,7 +11,8 @@ import pandas as pd
 
 # ——— 전역 설정 ———
 if getattr(sys, 'frozen', False):
-    base_dir = sys._MEIPASS
+    # onefile 빌드 시 EXE가 위치한 폴더
+    base_dir = os.path.dirname(sys.executable)
 else:
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
